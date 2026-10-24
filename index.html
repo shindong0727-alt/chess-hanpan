@@ -1,0 +1,1252 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#e6e9e3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111614" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="체스 한판">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23708b6b'/%3E%3Ctext x='32' y='48' font-size='44' text-anchor='middle' fill='%23fbfaf4'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>체스 한판</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Young+Serif&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols+2&text=%E2%99%94%E2%99%95%E2%99%96%E2%99%97%E2%99%98%E2%99%99%E2%99%9A%E2%99%9B%E2%99%9C%E2%99%9D%E2%99%9E%E2%99%9F&display=block">
+<style>
+/* Layout: club-room board on the left (top on phones), a scoresheet-style panel beside it. */
+:root {
+  --bg: #e6e9e3;
+  --surface: #f5f6f2;
+  --ink: #1b211e;
+  --muted: #5b655e;
+  --line: #c8cec6;
+  --accent: #22506f;
+  --accent-ink: #ffffff;
+  --sq-light: #e8e2cc;
+  --sq-dark: #708b6b;
+  --coord-on-light: #5d7659;
+  --coord-on-dark: #eef0e2;
+  --last: rgba(214, 178, 48, 0.42);
+  --sel: rgba(34, 80, 111, 0.45);
+  --dot: rgba(27, 33, 30, 0.28);
+  --check: rgba(196, 52, 38, 0.85);
+  --piece-w: #fbfaf4;
+  --piece-w-line: #1c1f1c;
+  --piece-b: #24292b;
+  --danger: #a23a2a;
+  --shadow: 0 1px 2px rgba(20, 30, 25, .08), 0 8px 24px rgba(20, 30, 25, .10);
+  --f-display: "Young Serif", "Noto Serif KR", Georgia, serif;
+  --f-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --f-piece: "Noto Sans Symbols 2", "Segoe UI Symbol", "Apple Symbols", "DejaVu Sans", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111614; --surface: #19201c; --ink: #e5eae6; --muted: #98a39c; --line: #2b3530;
+    --accent: #86b6d8; --accent-ink: #0f1a22;
+    --sq-light: #cdc7af; --sq-dark: #5a7556; --coord-on-light: #4f6a4c; --coord-on-dark: #e4e7d6;
+    --last: rgba(214, 178, 48, 0.45); --sel: rgba(134, 182, 216, 0.55); --dot: rgba(10, 14, 12, 0.35);
+    --danger: #e0806e; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111614; --surface: #19201c; --ink: #e5eae6; --muted: #98a39c; --line: #2b3530;
+  --accent: #86b6d8; --accent-ink: #0f1a22;
+  --sq-light: #cdc7af; --sq-dark: #5a7556; --coord-on-light: #4f6a4c; --coord-on-dark: #e4e7d6;
+  --last: rgba(214, 178, 48, 0.45); --sel: rgba(134, 182, 216, 0.55); --dot: rgba(10, 14, 12, 0.35);
+  --danger: #e0806e; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 32px;
+}
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; max-width: 980px; margin: 0 auto; align-items: start; }
+@media (min-width: 880px) { .app { grid-template-columns: minmax(0, 1fr) 340px; } }
+/* The board size depends only on the screen width, never on its content. */
+:root { --bsize: min(560px, calc(100vw - 2 * max(16px, env(safe-area-inset-left, 0px)))); }
+@media (min-width: 880px) { :root { --bsize: min(560px, calc(100vw - 2 * max(16px, env(safe-area-inset-left, 0px)) - 360px)); } }
+
+.boardcol { display: grid; gap: 8px; min-width: 0; width: 100%; justify-items: center; }
+.bar { width: var(--bsize); max-width: 100%; overflow: hidden; display: flex; align-items: center; gap: 10px; min-height: 34px; }
+.bar .who { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.bar .chip { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--piece-w-line); flex: none; }
+.bar .chip.w { background: var(--piece-w); }
+.bar .chip.b { background: var(--piece-b); border-color: var(--piece-b); }
+.bar .caps { font-family: var(--f-piece); font-size: 17px; letter-spacing: -2px; color: var(--muted); line-height: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+.bar .adv { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.bar .turn { margin-left: auto; font-size: 12px; font-weight: 500; padding: 2px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+.bar .turn[hidden] { display: none; }
+
+.boardwrap { position: relative; width: var(--bsize); height: var(--bsize); max-width: 100%; flex: none; }
+.board {
+  display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr)); width: 100%; height: 100%;
+  border-radius: 6px; overflow: hidden; box-shadow: var(--shadow); container-type: inline-size;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+.sq { position: relative; border: 0; padding: 0; margin: 0; min-width: 0; min-height: 0; overflow: hidden; background: var(--sq-light); display: grid; place-items: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sq.d { background: var(--sq-dark); }
+.sq.last::before, .sq.sel::before { content: ""; position: absolute; inset: 0; background: var(--last); }
+.sq.sel::before { background: var(--sel); }
+.sq.check::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, var(--check) 0%, rgba(196,52,38,.35) 45%, transparent 72%); }
+.sq .dot { position: absolute; width: 30%; height: 30%; border-radius: 50%; background: var(--dot); z-index: 3; pointer-events: none; }
+.sq .ring { position: absolute; inset: 5%; border-radius: 50%; border: 0.9cqw solid var(--dot); z-index: 3; pointer-events: none; }
+.sq .cf, .sq .cr { position: absolute; font-family: var(--f-mono); font-size: 2.1cqw; font-weight: 600; line-height: 1; z-index: 1; pointer-events: none; }
+.sq .cf { right: 4%; bottom: 4%; }
+.sq .cr { left: 5%; top: 5%; }
+.sq .cf, .sq .cr { color: var(--coord-on-light); }
+.sq.d .cf, .sq.d .cr { color: var(--coord-on-dark); }
+.pc { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font-family: var(--f-piece); font-size: 10.4cqw; line-height: 1; pointer-events: none; }
+.pc i, .pc b { grid-area: 1 / 1; font-style: normal; font-weight: 400; }
+.pc.w i { color: var(--piece-w); }
+.pc.w b { color: var(--piece-w-line); }
+.pc.b i, .pc.b b { color: var(--piece-b); }
+.pc.b i { filter: drop-shadow(0 0 0.15cqw rgba(255,255,255,.35)); }
+.pc.arrive { animation: arrive .18s ease-out; }
+@keyframes arrive { from { transform: scale(.82); opacity: .4; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pc.arrive { animation: none; } }
+
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(15, 20, 18, .42); border-radius: 6px; z-index: 10; padding: 16px; }
+.card { background: var(--surface); color: var(--ink); border-radius: 10px; padding: 20px; box-shadow: var(--shadow); width: min(320px, 100%); display: grid; gap: 12px; text-align: center; }
+.card h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 26px; line-height: 1.2; text-wrap: balance; }
+.card p { margin: 0; color: var(--muted); }
+.card .row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.promo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.promo button { position: relative; aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--line); background: var(--sq-light); cursor: pointer; container-type: inline-size; padding: 0; }
+.promo .pc { font-size: 78cqw; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; display: grid; gap: 20px; min-width: 0; }
+.brand { display: grid; gap: 2px; }
+.brand h1 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 30px; line-height: 1.1; letter-spacing: -.01em; }
+.brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.sec { display: grid; gap: 10px; }
+.sec + .sec { border-top: 1px solid var(--line); padding-top: 18px; }
+.sec h3 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.label { font-size: 13px; color: var(--muted); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 9px 6px; cursor: pointer; font-size: 14px; display: grid; gap: 0; line-height: 1.25; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button small { font-size: 11px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg button[aria-pressed="true"] small { color: inherit; opacity: .85; }
+.btn { border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 10px 14px; cursor: pointer; font-weight: 500; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.block { width: 100%; }
+.joinrow { display: flex; gap: 8px; }
+.joinrow input { flex: 1; min-width: 0; font-family: var(--f-mono); font-size: 18px; letter-spacing: .18em; text-transform: uppercase; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.note.err { color: var(--danger); }
+
+.status { font-family: var(--f-display); font-size: 24px; line-height: 1.2; margin: 0; text-wrap: balance; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.codebox { display: grid; gap: 6px; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); }
+.codebox .code { font-family: var(--f-mono); font-size: 30px; font-weight: 600; letter-spacing: .22em; user-select: all; -webkit-user-select: all; }
+.codebox .row { display: flex; align-items: center; gap: 10px; justify-content: space-between; flex-wrap: wrap; }
+.moves { font-family: var(--f-mono); font-size: 13.5px; font-variant-numeric: tabular-nums; max-height: 240px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.moves ol { list-style: none; margin: 0; padding: 6px 0; display: grid; }
+.moves li { display: grid; grid-template-columns: 3em 1fr 1fr; padding: 2px 12px; }
+.moves li:nth-child(even) { background: color-mix(in srgb, var(--line) 30%, transparent); }
+.moves .n { color: var(--muted); }
+.moves .cur { font-weight: 600; color: var(--accent); }
+.moves .empty { padding: 12px; color: var(--muted); font-family: var(--f-body); font-size: 13px; }
+.actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="boardcol">
+    <div class="bar" id="barTop"></div>
+    <div class="boardwrap">
+      <div class="board" id="board" role="grid" aria-label="체스판"></div>
+      <div class="overlay" id="overlay" hidden></div>
+    </div>
+    <div class="bar" id="barBottom"></div>
+  </div>
+  <aside class="panel" id="panel"></aside>
+</div>
+
+<script>
+function ChessEngine() {
+  // 0x88 board. row 0 = rank 8. piece: type 1..6 (P N B R Q K), +8 for black.
+  var P = 1, N = 2, B = 3, R = 4, Q = 5, K = 6, BLACK = 8;
+  var KN = [-33, -31, -18, -14, 14, 18, 31, 33];
+  var KG = [-17, -16, -15, -1, 1, 15, 16, 17];
+  var DI = [-17, -15, 15, 17];
+  var OR = [-16, -1, 1, 16];
+  var VAL = [0, 100, 320, 330, 500, 900, 0];
+  var PST = {
+    1: [0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10, 5,5,10,25,25,10,5,5, 0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5, 5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+    2: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+    3: [-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10, -10,5,5,10,10,5,5,-10, -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10, -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+    4: [0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+    5: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10, -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10, -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+    6: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10, 20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20],
+    7: [-50,-40,-30,-20,-20,-30,-40,-50, -30,-20,-10,0,0,-10,-20,-30, -30,-10,20,30,30,20,-10,-30, -30,-10,30,40,40,30,-10,-30, -30,-10,30,40,40,30,-10,-30, -30,-10,20,30,30,20,-10,-30, -30,-30,0,0,0,0,-30,-30, -50,-30,-30,-30,-30,-30,-30,-50]
+  };
+  var CMASK = new Int8Array(128);
+  for (var i = 0; i < 128; i++) CMASK[i] = 15;
+  CMASK[116] = 12; CMASK[119] = 14; CMASK[112] = 13; CMASK[4] = 3; CMASK[7] = 11; CMASK[0] = 7;
+
+  // zobrist
+  var seed = 1234567;
+  function rnd() { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; }
+  var ZP = [], ZC = [], ZE = [], ZS = rnd();
+  for (i = 0; i < 16 * 128; i++) ZP.push(rnd());
+  for (i = 0; i < 16; i++) ZC.push(rnd());
+  for (i = 0; i < 128; i++) ZE.push(rnd());
+
+  var b = new Int8Array(128), side = 0, castle = 0, ep = -1, half = 0, full = 1, hash = 0;
+  var kings = [0, 0];
+  var stack = []; // undo
+  var hist = []; // hashes of previous positions
+
+  function sqName(s) { return 'abcdefgh'[s & 7] + (8 - (s >> 4)); }
+  function nameSq(n) { return (8 - parseInt(n[1], 10)) * 16 + 'abcdefgh'.indexOf(n[0]); }
+
+  function computeHash() {
+    var h = 0;
+    for (var s = 0; s < 128; s++) { if (s & 0x88) { s += 7; continue; } if (b[s]) h ^= ZP[b[s] * 128 + s]; }
+    h ^= ZC[castle]; if (ep >= 0) h ^= ZE[ep]; if (side) h ^= ZS;
+    return h >>> 0;
+  }
+
+  function load(fen) {
+    var parts = fen.trim().split(/\s+/);
+    b.fill(0);
+    var rows = parts[0].split('/');
+    for (var r = 0; r < 8; r++) {
+      var c = 0;
+      for (var j = 0; j < rows[r].length; j++) {
+        var ch = rows[r][j];
+        if (ch >= '1' && ch <= '8') { c += +ch; continue; }
+        var t = 'pnbrqk'.indexOf(ch.toLowerCase()) + 1;
+        var p = t | (ch === ch.toLowerCase() ? BLACK : 0);
+        b[r * 16 + c] = p;
+        if (t === K) kings[p & BLACK ? 1 : 0] = r * 16 + c;
+        c++;
+      }
+    }
+    side = parts[1] === 'b' ? BLACK : 0;
+    castle = 0;
+    var cs = parts[2] || '-';
+    if (cs.indexOf('K') >= 0) castle |= 1; if (cs.indexOf('Q') >= 0) castle |= 2;
+    if (cs.indexOf('k') >= 0) castle |= 4; if (cs.indexOf('q') >= 0) castle |= 8;
+    ep = parts[3] && parts[3] !== '-' ? nameSq(parts[3]) : -1;
+    half = parts[4] ? +parts[4] : 0; full = parts[5] ? +parts[5] : 1;
+    stack = []; hist = [];
+    hash = computeHash();
+  }
+
+  function fen() {
+    var out = '';
+    for (var r = 0; r < 8; r++) {
+      var e = 0;
+      for (var c = 0; c < 8; c++) {
+        var p = b[r * 16 + c];
+        if (!p) { e++; continue; }
+        if (e) { out += e; e = 0; }
+        var ch = ' pnbrqk'[p & 7];
+        out += p & BLACK ? ch : ch.toUpperCase();
+      }
+      if (e) out += e;
+      if (r < 7) out += '/';
+    }
+    var cs = (castle & 1 ? 'K' : '') + (castle & 2 ? 'Q' : '') + (castle & 4 ? 'k' : '') + (castle & 8 ? 'q' : '');
+    return out + ' ' + (side ? 'b' : 'w') + ' ' + (cs || '-') + ' ' + (ep >= 0 ? sqName(ep) : '-') + ' ' + half + ' ' + full;
+  }
+
+  function attacked(sq, by) { // by: 0 or BLACK
+    var s, i, p, d;
+    if (by === 0) {
+      s = sq + 15; if (!(s & 0x88) && b[s] === P) return true;
+      s = sq + 17; if (!(s & 0x88) && b[s] === P) return true;
+    } else {
+      s = sq - 15; if (!(s & 0x88) && b[s] === (P | BLACK)) return true;
+      s = sq - 17; if (!(s & 0x88) && b[s] === (P | BLACK)) return true;
+    }
+    for (i = 0; i < 8; i++) {
+      s = sq + KN[i]; if (!(s & 0x88) && b[s] === (N | by)) return true;
+      s = sq + KG[i]; if (!(s & 0x88) && b[s] === (K | by)) return true;
+    }
+    for (i = 0; i < 4; i++) {
+      d = DI[i]; s = sq + d;
+      while (!(s & 0x88)) { p = b[s]; if (p) { if (p === (B | by) || p === (Q | by)) return true; break; } s += d; }
+      d = OR[i]; s = sq + d;
+      while (!(s & 0x88)) { p = b[s]; if (p) { if (p === (R | by) || p === (Q | by)) return true; break; } s += d; }
+    }
+    return false;
+  }
+
+  function inCheck() { return attacked(kings[side ? 1 : 0], side ^ BLACK); }
+
+  // move int: from | to<<7 | promo<<14 | flags<<17 ; flags 1 cap, 2 ep, 4 castle, 8 double
+  function mv(f, t, pr, fl) { return f | (t << 7) | (pr << 14) | (fl << 17); }
+  function mFrom(m) { return m & 127; }
+  function mTo(m) { return (m >> 7) & 127; }
+  function mPromo(m) { return (m >> 14) & 7; }
+  function mFlags(m) { return (m >> 17) & 15; }
+
+  function gen(list, capsOnly) {
+    var us = side, them = side ^ BLACK, s, p, t, d, i, to, q;
+    for (s = 0; s < 128; s++) {
+      if (s & 0x88) { s += 7; continue; }
+      p = b[s]; if (!p || (p & BLACK) !== us) continue;
+      t = p & 7;
+      if (t === P) {
+        var dir = us ? 16 : -16, startRow = us ? 1 : 6, lastRow = us ? 7 : 0;
+        to = s + dir;
+        if (!(to & 0x88) && !b[to]) {
+          if ((to >> 4) === lastRow) { for (q = Q; q >= N; q--) list.push(mv(s, to, q, 0)); }
+          else if (!capsOnly) {
+            list.push(mv(s, to, 0, 0));
+            if ((s >> 4) === startRow && !b[to + dir]) list.push(mv(s, to + dir, 0, 8));
+          }
+        }
+        for (i = -1; i <= 1; i += 2) {
+          to = s + dir + i;
+          if (to & 0x88) continue;
+          if (b[to] && (b[to] & BLACK) === them) {
+            if ((to >> 4) === lastRow) { for (q = Q; q >= N; q--) list.push(mv(s, to, q, 1)); }
+            else list.push(mv(s, to, 0, 1));
+          } else if (to === ep) list.push(mv(s, to, 0, 3));
+        }
+      } else if (t === N || t === K) {
+        var arr = t === N ? KN : KG;
+        for (i = 0; i < 8; i++) {
+          to = s + arr[i]; if (to & 0x88) continue;
+          if (!b[to]) { if (!capsOnly) list.push(mv(s, to, 0, 0)); }
+          else if ((b[to] & BLACK) === them) list.push(mv(s, to, 0, 1));
+        }
+        if (t === K && !capsOnly) {
+          if (us === 0 && s === 116) {
+            if ((castle & 1) && !b[117] && !b[118] && b[119] === R && !attacked(116, BLACK) && !attacked(117, BLACK) && !attacked(118, BLACK)) list.push(mv(116, 118, 0, 4));
+            if ((castle & 2) && !b[115] && !b[114] && !b[113] && b[112] === R && !attacked(116, BLACK) && !attacked(115, BLACK) && !attacked(114, BLACK)) list.push(mv(116, 114, 0, 4));
+          } else if (us === BLACK && s === 4) {
+            if ((castle & 4) && !b[5] && !b[6] && b[7] === (R | BLACK) && !attacked(4, 0) && !attacked(5, 0) && !attacked(6, 0)) list.push(mv(4, 6, 0, 4));
+            if ((castle & 8) && !b[3] && !b[2] && !b[1] && b[0] === (R | BLACK) && !attacked(4, 0) && !attacked(3, 0) && !attacked(2, 0)) list.push(mv(4, 2, 0, 4));
+          }
+        }
+      } else {
+        var dirs = t === B ? DI : t === R ? OR : null;
+        var n = dirs ? 4 : 8;
+        for (i = 0; i < n; i++) {
+          d = dirs ? dirs[i] : KG[i]; to = s + d;
+          while (!(to & 0x88)) {
+            if (!b[to]) { if (!capsOnly) list.push(mv(s, to, 0, 0)); }
+            else { if ((b[to] & BLACK) === them) list.push(mv(s, to, 0, 1)); break; }
+            to += d;
+          }
+        }
+      }
+    }
+    return list;
+  }
+
+  function setP(s, p) { // xor in/out handled by caller
+    b[s] = p;
+  }
+
+  function make(m) {
+    var f = mFrom(m), t = mTo(m), fl = mFlags(m), pr = mPromo(m);
+    var p = b[f], cap = b[t], us = side;
+    stack.push([m, cap, castle, ep, half, hash]);
+    hist.push(hash);
+    var h = hash;
+    h ^= ZC[castle]; if (ep >= 0) h ^= ZE[ep];
+    h ^= ZP[p * 128 + f];
+    if (cap) h ^= ZP[cap * 128 + t];
+    if (fl & 2) { // en passant
+      var cs = t + (us ? -16 : 16);
+      cap = b[cs]; h ^= ZP[cap * 128 + cs]; b[cs] = 0;
+      stack[stack.length - 1][1] = cap;
+    }
+    b[f] = 0;
+    var np = pr ? (pr | us) : p;
+    b[t] = np; h ^= ZP[np * 128 + t];
+    if (fl & 4) {
+      var rf, rt;
+      if (t === 118) { rf = 119; rt = 117; } else if (t === 114) { rf = 112; rt = 115; }
+      else if (t === 6) { rf = 7; rt = 5; } else { rf = 0; rt = 3; }
+      var rp = b[rf]; b[rf] = 0; b[rt] = rp; h ^= ZP[rp * 128 + rf] ^ ZP[rp * 128 + rt];
+    }
+    if ((p & 7) === K) kings[us ? 1 : 0] = t;
+    castle &= CMASK[f] & CMASK[t];
+    ep = (fl & 8) ? (f + t) >> 1 : -1;
+    half = ((p & 7) === P || cap) ? 0 : half + 1;
+    if (us) full++;
+    h ^= ZC[castle]; if (ep >= 0) h ^= ZE[ep];
+    side ^= BLACK; h ^= ZS;
+    hash = h >>> 0;
+    if (attacked(kings[us ? 1 : 0], side)) { unmake(); return false; }
+    return true;
+  }
+
+  function unmake() {
+    var u = stack.pop(); hist.pop();
+    var m = u[0], f = mFrom(m), t = mTo(m), fl = mFlags(m), pr = mPromo(m);
+    side ^= BLACK;
+    var us = side;
+    var p = b[t];
+    if (pr) p = P | us;
+    b[f] = p;
+    if (fl & 2) { b[t] = 0; b[t + (us ? -16 : 16)] = u[1]; }
+    else b[t] = u[1];
+    if (fl & 4) {
+      var rf, rt;
+      if (t === 118) { rf = 119; rt = 117; } else if (t === 114) { rf = 112; rt = 115; }
+      else if (t === 6) { rf = 7; rt = 5; } else { rf = 0; rt = 3; }
+      b[rf] = b[rt]; b[rt] = 0;
+    }
+    if ((p & 7) === K) kings[us ? 1 : 0] = f;
+    castle = u[2]; ep = u[3]; half = u[4]; hash = u[5];
+    if (us) full--;
+  }
+
+  function legal() {
+    var l = gen([], false), out = [];
+    for (var i = 0; i < l.length; i++) if (make(l[i])) { unmake(); out.push(l[i]); }
+    return out;
+  }
+
+  function perft(d) {
+    if (d === 0) return 1;
+    var l = gen([], false), n = 0;
+    for (var i = 0; i < l.length; i++) if (make(l[i])) { n += perft(d - 1); unmake(); }
+    return n;
+  }
+
+  function uci(m) { return sqName(mFrom(m)) + sqName(mTo(m)) + (mPromo(m) ? ' nbrq'[mPromo(m) - 1] : ''); }
+  function findUci(s) {
+    var l = legal();
+    for (var i = 0; i < l.length; i++) {
+      var u = uci(l[i]);
+      if (u === s || (s.length === 4 && u.length === 5 && u.slice(0, 4) === s && u[4] === 'q')) return l[i];
+    }
+    return 0;
+  }
+
+  function insufficient() {
+    var minors = 0, bishopsColors = [], s, p, t;
+    for (s = 0; s < 128; s++) {
+      if (s & 0x88) { s += 7; continue; }
+      p = b[s]; if (!p) continue; t = p & 7;
+      if (t === K) continue;
+      if (t === P || t === R || t === Q) return false;
+      minors++;
+      if (t === B) bishopsColors.push(((s >> 4) + (s & 7)) & 1); else bishopsColors.push(-1);
+    }
+    if (minors <= 1) return true;
+    // only bishops all on same color
+    for (var i = 0; i < bishopsColors.length; i++) if (bishopsColors[i] !== bishopsColors[0] || bishopsColors[i] < 0) return false;
+    return true;
+  }
+
+  function repetitions() {
+    var c = 1;
+    for (var i = hist.length - 2; i >= 0 && i >= hist.length - half; i -= 2) if (hist[i] === hash) c++;
+    return c;
+  }
+
+  function status() {
+    var l = legal();
+    if (!l.length) return inCheck() ? { over: true, type: 'checkmate', winner: side ? 'w' : 'b' } : { over: true, type: 'stalemate' };
+    if (half >= 100) return { over: true, type: 'fifty' };
+    if (insufficient()) return { over: true, type: 'material' };
+    if (repetitions() >= 3) return { over: true, type: 'repetition' };
+    return { over: false, check: inCheck() };
+  }
+
+  function san(m) {
+    var f = mFrom(m), t = mTo(m), fl = mFlags(m), p = b[f], tp = p & 7, s;
+    if (fl & 4) s = (t & 7) === 6 ? 'O-O' : 'O-O-O';
+    else {
+      s = '';
+      if (tp === P) { if (fl & 1) s = 'abcdefgh'[f & 7]; }
+      else {
+        s = ' PNBRQK'[tp];
+        var l = legal(), sameF = false, sameR = false, amb = false;
+        for (var i = 0; i < l.length; i++) {
+          var o = l[i];
+          if (o !== m && mTo(o) === t && b[mFrom(o)] === p) {
+            amb = true;
+            if ((mFrom(o) & 7) === (f & 7)) sameF = true;
+            if ((mFrom(o) >> 4) === (f >> 4)) sameR = true;
+          }
+        }
+        if (amb) { if (!sameF) s += 'abcdefgh'[f & 7]; else if (!sameR) s += (8 - (f >> 4)); else s += sqName(f); }
+      }
+      if (fl & 1) s += 'x';
+      s += sqName(t);
+      if (mPromo(m)) s += '=' + ' PNBRQ'[mPromo(m)];
+    }
+    make(m);
+    if (inCheck()) s += legal().length ? '+' : '#';
+    unmake();
+    return s;
+  }
+
+  // ---------- search ----------
+  function evaluate() {
+    var mg = 0, mat = 0, s, p, t, idx, phase = 0;
+    for (s = 0; s < 128; s++) {
+      if (s & 0x88) { s += 7; continue; }
+      p = b[s]; if (!p) continue; t = p & 7;
+      if (t !== K && t !== P) phase += VAL[t];
+    }
+    var endgame = phase <= 1300;
+    for (s = 0; s < 128; s++) {
+      if (s & 0x88) { s += 7; continue; }
+      p = b[s]; if (!p) continue; t = p & 7;
+      idx = (p & BLACK) ? (7 - (s >> 4)) * 8 + (s & 7) : (s >> 4) * 8 + (s & 7);
+      var v = VAL[t] + PST[(t === K && endgame) ? 7 : t][idx];
+      if (p & BLACK) mg -= v; else mg += v;
+    }
+    return side ? -mg : mg;
+  }
+
+  var MATE = 100000, TTSIZE = 1 << 18;
+  var ttKey = new Uint32Array(TTSIZE), ttMove = new Int32Array(TTSIZE), ttScore = new Int32Array(TTSIZE),
+      ttDepth = new Int8Array(TTSIZE), ttFlag = new Int8Array(TTSIZE);
+  var nodes = 0, deadline = 0, stopped = false, killers = [], historyH = new Int32Array(128 * 128);
+
+  function orderScore(m, ttm, ply) {
+    if (m === ttm) return 1e7;
+    var fl = mFlags(m);
+    if (fl & 1) { var vic = fl & 2 ? P : (b[mTo(m)] & 7); return 1e6 + VAL[vic] * 10 - VAL[b[mFrom(m)] & 7] / 10; }
+    if (mPromo(m)) return 9e5;
+    if (killers[ply] && (killers[ply][0] === m || killers[ply][1] === m)) return 8e5;
+    return historyH[mFrom(m) * 128 + mTo(m)];
+  }
+  function sortMoves(l, ttm, ply) {
+    var sc = l.map(function (m) { return orderScore(m, ttm, ply); });
+    var idx = l.map(function (_, i) { return i; }).sort(function (a, c) { return sc[c] - sc[a]; });
+    return idx.map(function (i) { return l[i]; });
+  }
+
+  function quiesce(alpha, beta, ply) {
+    if ((++nodes & 2047) === 0 && Date.now() > deadline) stopped = true;
+    if (stopped) return 0;
+    var stand = evaluate();
+    if (stand >= beta) return stand;
+    if (stand > alpha) alpha = stand;
+    if (ply > 40) return stand;
+    var l = sortMoves(gen([], true), 0, ply);
+    for (var i = 0; i < l.length; i++) {
+      if (!make(l[i])) continue;
+      var sc = -quiesce(-beta, -alpha, ply + 1);
+      unmake();
+      if (stopped) return 0;
+      if (sc >= beta) return sc;
+      if (sc > alpha) alpha = sc;
+    }
+    return alpha;
+  }
+
+  function isRepeat() {
+    for (var i = hist.length - 2; i >= 0 && i >= hist.length - half; i -= 2) if (hist[i] === hash) return true;
+    return false;
+  }
+
+  function search(depth, alpha, beta, ply) {
+    if ((++nodes & 2047) === 0 && Date.now() > deadline) stopped = true;
+    if (stopped) return 0;
+    if (ply > 0 && (half >= 100 || isRepeat())) return 0;
+    var check = inCheck();
+    if (check) depth++;
+    if (depth <= 0) return quiesce(alpha, beta, ply);
+    var slot = hash & (TTSIZE - 1), ttm = 0;
+    if (ttKey[slot] === hash) {
+      ttm = ttMove[slot];
+      if (ply > 0 && ttDepth[slot] >= depth) {
+        var ts = ttScore[slot], tf = ttFlag[slot];
+        if (tf === 0) return ts;
+        if (tf === 1 && ts >= beta) return ts;
+        if (tf === 2 && ts <= alpha) return ts;
+      }
+    }
+    var l = sortMoves(gen([], false), ttm, ply);
+    var best = -MATE - 1, bestM = 0, legalN = 0, a0 = alpha;
+    for (var i = 0; i < l.length; i++) {
+      var m = l[i];
+      if (!make(m)) continue;
+      legalN++;
+      var sc;
+      if (legalN > 4 && depth >= 3 && !check && !(mFlags(m) & 1) && !mPromo(m) && !inCheck()) {
+        sc = -search(depth - 2, -alpha - 1, -alpha, ply + 1);
+        if (sc > alpha) sc = -search(depth - 1, -beta, -alpha, ply + 1);
+      } else sc = -search(depth - 1, -beta, -alpha, ply + 1);
+      unmake();
+      if (stopped) return 0;
+      if (sc > best) { best = sc; bestM = m; }
+      if (sc > alpha) {
+        alpha = sc;
+        if (sc >= beta) {
+          if (!(mFlags(m) & 1)) {
+            if (!killers[ply]) killers[ply] = [0, 0];
+            if (killers[ply][0] !== m) { killers[ply][1] = killers[ply][0]; killers[ply][0] = m; }
+            historyH[mFrom(m) * 128 + mTo(m)] += depth * depth;
+          }
+          break;
+        }
+      }
+    }
+    if (!legalN) return check ? -MATE + ply : 0;
+    ttKey[slot] = hash; ttMove[slot] = bestM; ttScore[slot] = best; ttDepth[slot] = depth;
+    ttFlag[slot] = best >= beta ? 1 : best <= a0 ? 2 : 0;
+    return best;
+  }
+
+  // level: 'easy' | 'normal' | 'hard'
+  function think(level) {
+    var l = legal();
+    if (!l.length) return null;
+    if (l.length === 1) return uci(l[0]);
+    nodes = 0; stopped = false; killers = []; historyH.fill(0);
+    var cfg = level === 'easy' ? { depth: 1, time: 400, noise: 180, blunder: 0.25 }
+      : level === 'normal' ? { depth: 3, time: 1200, noise: 35, blunder: 0 }
+      : { depth: 30, time: 2200, noise: 0, blunder: 0 };
+    if (cfg.blunder && Math.random() < cfg.blunder) return uci(l[Math.floor(Math.random() * l.length)]);
+    deadline = Date.now() + cfg.time;
+    if (cfg.noise) {
+      // shallow search per root move with noise
+      var scored = [];
+      for (var i = 0; i < l.length; i++) {
+        make(l[i]);
+        var s = -search(cfg.depth - 1, -MATE - 1, MATE + 1, 1);
+        unmake();
+        if (stopped) break;
+        scored.push([l[i], s + (Math.random() * 2 - 1) * cfg.noise]);
+      }
+      if (!scored.length) return uci(l[0]);
+      scored.sort(function (a, c) { return c[1] - a[1]; });
+      return uci(scored[0][0]);
+    }
+    var bestM = l[0];
+    for (var d = 1; d <= cfg.depth; d++) {
+      var sc = search(d, -MATE - 1, MATE + 1, 0);
+      if (stopped) break;
+      var slot = hash & (TTSIZE - 1);
+      if (ttKey[slot] === hash && ttMove[slot]) bestM = ttMove[slot];
+      if (Math.abs(sc) > MATE - 100) break;
+      if (Date.now() > deadline - cfg.time * 0.55) break; // next depth unlikely to finish
+    }
+    return uci(bestM);
+  }
+
+  function boardArray() {
+    var out = [];
+    for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
+      var p = b[r * 16 + c];
+      out.push(p ? ((p & BLACK) ? 'b' : 'w') + ' pnbrqk'[p & 7] : null);
+    }
+    return out;
+  }
+
+  load('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+
+  return {
+    load: load, fen: fen, perft: perft, legal: legal, make: make, unmake: unmake, uci: uci, findUci: findUci,
+    san: san, status: status, inCheck: inCheck, think: think, board: boardArray,
+    turn: function () { return side ? 'b' : 'w'; },
+    from: function (m) { return sqName(mFrom(m)); }, to: function (m) { return sqName(mTo(m)); },
+    promo: mPromo, isCapture: function (m) { return !!(mFlags(m) & 1); },
+    kingSq: function (c) { return sqName(kings[c === 'b' ? 1 : 0]); }
+  };
+}
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  var E = ChessEngine();
+  var FILLED = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  var HOLLOW = { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' };
+  var NAMES = { k: '킹', q: '퀸', r: '룩', b: '비숍', n: '나이트', p: '폰' };
+  var LEVELS = { easy: '쉬움', normal: '보통', hard: '어려움' };
+  var SESSION_KEY = 'chess-hanpan.session';
+
+  function store(k, v) { try { if (v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function rid(n) { var a = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', s = ''; for (var i = 0; i < n; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
+  var ME = load('chess-hanpan.me'); if (!ME) { ME = 'u' + rid(12); store('chess-hanpan.me', ME); }
+
+  var S = {
+    screen: 'lobby', mode: null, level: 'normal', myColor: 'w', moves: [], sans: [], result: null,
+    selected: null, targets: [], flipped: false, thinking: false, promo: null, overlayClosed: false,
+    pick: { level: 'normal', aiColor: 'w', invColor: 'w' },
+    online: null, onlineState: 'checking', lobbyMsg: '', lobbyErr: false, busy: false, confirmResign: false,
+    animTo: null
+  };
+  var lastLen = 0;
+
+  // ---------- helpers ----------
+  function opp(c) { return c === 'w' ? 'b' : 'w'; }
+  function colorName(c) { return c === 'w' ? '백' : '흑'; }
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function pieceHTML(code, extra) { // code like 'wn'
+    var c = code[0], t = code[1];
+    return '<span class="pc ' + c + (extra ? ' ' + extra : '') + '"><i>' + FILLED[t] + '︎</i><b>' + HOLLOW[t] + '︎</b></span>';
+  }
+
+  function replay() {
+    E.load(START); S.sans = [];
+    var ok = [];
+    for (var i = 0; i < S.moves.length; i++) {
+      var m = E.findUci(S.moves[i]);
+      if (!m) break;
+      S.sans.push(E.san(m)); E.make(m); ok.push(S.moves[i]);
+    }
+    S.moves = ok;
+  }
+  function gameResult() {
+    if (S.result) return S.result;
+    var st = E.status();
+    return st.over ? st : null;
+  }
+  function resultText(r) {
+    var w = r.winner ? colorName(r.winner) + ' 승' : '무승부';
+    var t = { checkmate: '체크메이트', stalemate: '스테일메이트', fifty: '50수 규칙', material: '기물 부족', repetition: '3회 동형 반복', resign: '기권' }[r.type] || '';
+    return { title: r.winner ? (S.mode === 'ai' || (S.online && !S.online.spectator) ? (r.winner === S.myColor ? '승리했어요' : '패배했어요') : w) : '무승부', detail: t + ' · ' + w };
+  }
+  function bottomColor() { return S.flipped ? opp(S.myColor) : S.myColor; }
+  function bothSeated() { var d = S.online && S.online.doc; return !!(d && d.white && d.black); }
+  function canMove() {
+    if (S.screen !== 'game' || gameResult() || S.promo) return false;
+    if (E.turn() !== S.myColor) return false;
+    if (S.mode === 'ai') return !S.thinking;
+    if (S.mode === 'online') return !S.online.spectator && bothSeated();
+    return false;
+  }
+
+  // ---------- board ----------
+  function renderBoard() {
+    var arr = E.board(), bc = bottomColor();
+    var res = gameResult();
+    var lastU = S.moves.length ? S.moves[S.moves.length - 1] : null;
+    var checkSq = (!res || res.type === 'checkmate') && E.inCheck() ? E.kingSq(E.turn()) : null;
+    var html = '';
+    for (var vr = 0; vr < 8; vr++) {
+      for (var vc = 0; vc < 8; vc++) {
+        var r = bc === 'w' ? vr : 7 - vr, c = bc === 'w' ? vc : 7 - vc;
+        var name = 'abcdefgh'[c] + (8 - r);
+        var p = arr[r * 8 + c];
+        var cls = 'sq' + (((r + c) & 1) ? ' d' : '');
+        if (lastU && (lastU.slice(0, 2) === name || lastU.slice(2, 4) === name)) cls += ' last';
+        if (S.selected === name) cls += ' sel';
+        if (checkSq === name) cls += ' check';
+        var inner = '';
+        if (vr === 7) inner += '<span class="cf">' + 'abcdefgh'[c] + '</span>';
+        if (vc === 0) inner += '<span class="cr">' + (8 - r) + '</span>';
+        if (p) inner += pieceHTML(p, S.animTo === name ? 'arrive' : '');
+        if (S.targets.indexOf(name) >= 0) inner += p ? '<span class="ring"></span>' : '<span class="dot"></span>';
+        var label = name + (p ? ' ' + colorName(p[0]) + ' ' + NAMES[p[1]] : '');
+        html += '<button class="' + cls + '" data-sq="' + name + '" aria-label="' + label + '">' + inner + '</button>';
+      }
+    }
+    el('board').innerHTML = html;
+    S.animTo = null;
+  }
+
+  function captured() {
+    var init = { p: 8, n: 2, b: 2, r: 2, q: 1 }, val = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+    var cnt = { w: { p: 0, n: 0, b: 0, r: 0, q: 0 }, b: { p: 0, n: 0, b: 0, r: 0, q: 0 } };
+    E.board().forEach(function (p) { if (p && p[1] !== 'k') cnt[p[0]][p[1]]++; });
+    var out = { w: '', b: '', matW: 0, matB: 0 };
+    ['q', 'r', 'b', 'n', 'p'].forEach(function (t) {
+      // pieces of black that are gone were captured by white
+      var lostB = Math.max(0, init[t] - cnt.b[t]), lostW = Math.max(0, init[t] - cnt.w[t]);
+      for (var i = 0; i < lostB; i++) out.w += FILLED[t] + '︎';
+      for (i = 0; i < lostW; i++) out.b += FILLED[t] + '︎';
+      out.matW += cnt.w[t] * val[t]; out.matB += cnt.b[t] * val[t];
+    });
+    return out;
+  }
+
+  function renderBars() {
+    var bc = bottomColor(), tc = opp(bc), cap = captured();
+    function label(c) {
+      if (S.screen !== 'game') return c === 'w' ? '백' : '흑';
+      if (S.mode === 'ai') return c === S.myColor ? '나' : '컴퓨터 · ' + LEVELS[S.level];
+      var d = S.online && S.online.doc;
+      if (S.online && S.online.spectator) return colorName(c);
+      if (c === S.myColor) return '나';
+      return d && d[c === 'w' ? 'white' : 'black'] ? '상대' : '상대 기다리는 중';
+    }
+    function bar(c) {
+      var adv = c === 'w' ? cap.matW - cap.matB : cap.matB - cap.matW;
+      var showTurn = S.screen === 'game' && !gameResult() && E.turn() === c;
+      var turnText = S.mode === 'ai' && c !== S.myColor && S.thinking ? '생각 중' : '차례';
+      return '<span class="who"><span class="chip ' + c + '"></span>' + esc(label(c)) + '</span>' +
+        '<span class="caps" aria-label="잡은 기물">' + (c === 'w' ? cap.w : cap.b) + '</span>' +
+        (adv > 0 ? '<span class="adv">+' + adv + '</span>' : '') +
+        '<span class="turn"' + (showTurn ? '' : ' hidden') + '>' + turnText + '</span>';
+    }
+    el('barTop').innerHTML = bar(tc);
+    el('barBottom').innerHTML = bar(bc);
+  }
+
+  function renderOverlay() {
+    var ov = el('overlay');
+    if (S.promo) {
+      var c = E.turn();
+      ov.innerHTML = '<div class="card"><h2>승격할 기물</h2><div class="promo">' +
+        ['q', 'r', 'b', 'n'].map(function (t) { return '<button data-promo="' + t + '" aria-label="' + NAMES[t] + '">' + pieceHTML(c + t) + '</button>'; }).join('') +
+        '</div><button class="btn" data-act="promo-cancel">취소</button></div>';
+      ov.hidden = false; return;
+    }
+    var res = S.screen === 'game' ? gameResult() : null;
+    if (res && !S.overlayClosed) {
+      var t = resultText(res);
+      var again = S.mode === 'ai' ? '<button class="btn primary" data-act="again">다시 하기</button>'
+        : (!S.online.spectator ? '<button class="btn primary" data-act="rematch">색 바꿔 재대결</button>' : '');
+      ov.innerHTML = '<div class="card"><h2>' + esc(t.title) + '</h2><p>' + esc(t.detail) + ' · ' + Math.ceil(S.moves.length / 2) + '수</p>' +
+        '<div class="row">' + again + '<button class="btn" data-act="review">판 보기</button><button class="btn" data-act="lobby">처음으로</button></div></div>';
+      ov.hidden = false; return;
+    }
+    ov.hidden = true; ov.innerHTML = '';
+  }
+
+  // ---------- panel ----------
+  function segHTML(group, options, value) {
+    return '<div class="seg" role="group">' + options.map(function (o) {
+      return '<button data-seg="' + group + '" data-val="' + o[0] + '" aria-pressed="' + (o[0] === value) + '">' + o[1] + (o[2] ? '<small>' + o[2] + '</small>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
+  function onlineNote() {
+    if (S.onlineState === 'checking') return '온라인 연결을 확인하고 있어요.';
+    if (S.onlineState === 'db') return '같은 페이지 링크를 받은 친구가 코드를 입력하면 바로 시작돼요.';
+    return '이 페이지 주소를 친구에게 보내고 초대 코드를 알려주세요. 서로 직접 연결해요.';
+  }
+  function renderLobby() {
+    var p = S.pick;
+    return '<div class="brand"><h1>체스 한판</h1><p>친구를 초대하거나 컴퓨터와 둬요</p></div>' +
+      '<section class="sec"><h3>컴퓨터와 대전</h3>' +
+      '<span class="label">난이도</span>' +
+      segHTML('level', [['easy', '쉬움', '실수가 잦아요'], ['normal', '보통', '3수 앞을 읽어요'], ['hard', '어려움', '깊게 읽어요']], p.level) +
+      '<span class="label">내 기물</span>' +
+      segHTML('aiColor', [['w', '백 (선수)'], ['b', '흑'], ['r', '무작위']], p.aiColor) +
+      '<button class="btn primary block" data-act="start-ai">대국 시작</button></section>' +
+      '<section class="sec"><h3>친구와 대전</h3>' +
+      '<span class="label">내 기물</span>' +
+      segHTML('invColor', [['w', '백 (선수)'], ['b', '흑'], ['r', '무작위']], p.invColor) +
+      '<button class="btn primary block" data-act="create" ' + (S.busy || S.onlineState === 'checking' ? 'disabled' : '') + '>초대 코드 만들기</button>' +
+      '<span class="label">받은 코드로 참가</span>' +
+      '<form class="joinrow" id="joinForm"><input id="joinCode" maxlength="5" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7Q2M" aria-label="초대 코드"><button class="btn" type="submit" ' + (S.busy || S.onlineState === 'checking' ? 'disabled' : '') + '>참가</button></form>' +
+      '<p class="note' + (S.lobbyErr ? ' err' : '') + '">' + esc(S.lobbyMsg || onlineNote()) + '</p></section>';
+  }
+  function statusText() {
+    var res = gameResult();
+    if (res) { var t = resultText(res); return [t.title, t.detail]; }
+    var turn = E.turn(), chk = E.inCheck() ? '체크! ' : '';
+    if (S.mode === 'ai') {
+      if (turn === S.myColor) return [chk + '내 차례', colorName(turn) + '이 둘 차례예요'];
+      return ['컴퓨터가 생각 중', LEVELS[S.level] + ' 난이도 · ' + colorName(turn)];
+    }
+    if (!bothSeated()) return ['상대를 기다리는 중', '친구가 코드를 입력하면 시작돼요'];
+    if (S.online.spectator) return [chk + colorName(turn) + ' 차례', '관전 중이에요'];
+    return turn === S.myColor ? [chk + '내 차례', '나는 ' + colorName(S.myColor)] : [chk + '상대 차례', '나는 ' + colorName(S.myColor)];
+  }
+  function movesHTML() {
+    if (!S.sans.length) return '<div class="empty">첫 수를 기다리고 있어요.</div>';
+    var rows = '';
+    for (var i = 0; i < S.sans.length; i += 2) {
+      var last = S.sans.length - 1;
+      rows += '<li><span class="n">' + (i / 2 + 1) + '.</span><span' + (i === last ? ' class="cur"' : '') + '>' + esc(S.sans[i]) + '</span><span' + (i + 1 === last ? ' class="cur"' : '') + '>' + esc(S.sans[i + 1] || '') + '</span></li>';
+    }
+    return '<ol>' + rows + '</ol>';
+  }
+  function renderGamePanel() {
+    var st = statusText(), res = gameResult();
+    var code = '';
+    if (S.mode === 'online') {
+      var waiting = !bothSeated();
+      code = '<div class="codebox"><span class="label">' + (waiting ? '친구에게 이 코드를 알려주세요' : '대국 코드') + '</span>' +
+        '<div class="row"><span class="code" id="codeText">' + esc(S.online.code) + '</span><button class="btn" data-act="copy">' + (S.copied ? '복사됨' : '복사') + '</button></div>' +
+        (waiting ? '<p class="note">' + esc(S.online.kind === 'db' ? '친구가 같은 링크를 열고 "받은 코드로 참가"에 입력하면 돼요.' : '친구가 이 페이지를 열고 코드를 입력하면 연결돼요. 이 화면을 켜 두세요.') + '</p>' : '') +
+        (S.online.err ? '<p class="note err">' + esc(S.online.err) + '</p>' : '') + '</div>';
+    }
+    var acts = '';
+    if (S.mode === 'ai') {
+      var canUndo = !res && S.moves.length > (S.myColor === 'b' ? 1 : 0);
+      acts += '<button class="btn" data-act="undo" ' + (canUndo || (res && S.moves.length) ? '' : 'disabled') + '>한 수 무르기</button>';
+    }
+    acts += '<button class="btn" data-act="flip">판 돌리기</button>';
+    if (!res && !(S.online && S.online.spectator) && (S.mode === 'ai' || bothSeated())) {
+      acts += '<button class="btn danger" data-act="resign">' + (S.confirmResign ? '한 번 더 누르면 기권' : '기권') + '</button>';
+    } else if (res) {
+      acts += S.mode === 'ai' ? '<button class="btn" data-act="again">다시 하기</button>' : (!S.online.spectator ? '<button class="btn" data-act="rematch">재대결</button>' : '');
+    }
+    acts += '<button class="btn" data-act="lobby">처음으로</button>';
+    return '<div><p class="status">' + esc(st[0]) + '</p><p class="sub">' + esc(st[1]) + '</p></div>' + code +
+      '<section class="sec"><h3>기보</h3><div class="moves" id="moves">' + movesHTML() + '</div></section>' +
+      '<div class="actions">' + acts + '</div>';
+  }
+  function renderPanel() {
+    var keep = document.activeElement && document.activeElement.id === 'joinCode' ? el('joinCode').value : null;
+    var val = el('joinCode') ? el('joinCode').value : '';
+    el('panel').innerHTML = S.screen === 'lobby' ? renderLobby() : renderGamePanel();
+    if (el('joinCode')) { el('joinCode').value = val; if (keep !== null) el('joinCode').focus(); }
+    var mv = el('moves'); if (mv) mv.scrollTop = mv.scrollHeight;
+  }
+
+  function render() {
+    if (S.moves.length !== lastLen) { S.animTo = S.moves.length > lastLen && S.moves.length ? S.moves[S.moves.length - 1].slice(2, 4) : null; lastLen = S.moves.length; }
+    renderBoard(); renderBars(); renderOverlay(); renderPanel();
+  }
+
+  // ---------- moves ----------
+  function clearSel() { S.selected = null; S.targets = []; }
+  function legalFrom(sq) {
+    return E.legal().filter(function (m) { return E.from(m) === sq; });
+  }
+  function clickSquare(sq) {
+    if (!canMove()) { clearSel(); render(); return; }
+    if (S.selected && S.targets.indexOf(sq) >= 0) {
+      var ms = legalFrom(S.selected).filter(function (m) { return E.to(m) === sq; });
+      if (ms.length > 1 || (ms.length === 1 && E.promo(ms[0]))) { S.promo = { from: S.selected, to: sq }; render(); return; }
+      var u = S.selected + sq;
+      clearSel(); playMove(u); return;
+    }
+    var p = E.board()[(8 - +sq[1]) * 8 + 'abcdefgh'.indexOf(sq[0])];
+    if (p && p[0] === S.myColor && S.selected !== sq) {
+      S.selected = sq; S.targets = legalFrom(sq).map(function (m) { return E.to(m); });
+    } else clearSel();
+    render();
+  }
+  function playMove(u) {
+    var m = E.findUci(u); if (!m) return;
+    S.moves.push(u); S.confirmResign = false;
+    replay();
+    var res = gameResult();
+    render();
+    if (S.mode === 'ai') { saveAi(); if (!res) requestAi(); }
+    else if (S.mode === 'online') {
+      S.online.writing = true;
+      S.online.t.write({ moves: S.moves.slice(), result: res || null, updated: Date.now() })
+        .catch(function () { S.online.err = '수를 보내지 못했어요. 연결을 확인해 주세요.'; render(); })
+        .then(function () { S.online.writing = false; });
+    }
+  }
+
+  // ---------- computer ----------
+  var worker = null, workerOK = true, pend = {}, aiReq = 0, mainEngine = null;
+  function mainThink(moves, level) {
+    if (!mainEngine) mainEngine = ChessEngine();
+    mainEngine.load(START);
+    for (var i = 0; i < moves.length; i++) { var m = mainEngine.findUci(moves[i]); if (!m) break; mainEngine.make(m); }
+    return mainEngine.think(level);
+  }
+  function engineMove(moves, level) {
+    return new Promise(function (resolve) {
+      var id = 'r' + Math.random();
+      if (workerOK) {
+        try {
+          if (!worker) {
+            var src = ChessEngine.toString() + '\nvar W=ChessEngine();var START=' + JSON.stringify(START) +
+              ';onmessage=function(e){var d=e.data;W.load(START);for(var i=0;i<d.moves.length;i++){var m=W.findUci(d.moves[i]);if(!m)break;W.make(m);}postMessage({id:d.id,move:W.think(d.level)});};';
+            worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+            worker.onmessage = function (e) { var f = pend[e.data.id]; if (f) { delete pend[e.data.id]; f(e.data.move); } };
+            worker.onerror = function () { workerOK = false; worker = null; var ps = pend; pend = {}; Object.keys(ps).forEach(function (k) { ps[k](undefined); }); };
+          }
+          pend[id] = function (mv) { resolve(mv === undefined ? mainThink(moves, level) : mv); };
+          worker.postMessage({ id: id, moves: moves, level: level });
+          return;
+        } catch (e) { workerOK = false; worker = null; }
+      }
+      setTimeout(function () { resolve(mainThink(moves, level)); }, 30);
+    });
+  }
+  function requestAi() {
+    if (S.mode !== 'ai' || gameResult() || E.turn() === S.myColor) return;
+    var id = ++aiReq, t0 = Date.now();
+    S.thinking = true; render();
+    engineMove(S.moves.slice(), S.level).then(function (u) {
+      var wait = Math.max(0, 450 - (Date.now() - t0));
+      setTimeout(function () {
+        if (id !== aiReq || S.mode !== 'ai') return;
+        S.thinking = false;
+        if (u) playMove(u); else render();
+      }, wait);
+    });
+  }
+  function startAi() {
+    var c = S.pick.aiColor === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : S.pick.aiColor;
+    leaveOnline();
+    aiReq++;
+    S.screen = 'game'; S.mode = 'ai'; S.level = S.pick.level; S.myColor = c; S.flipped = false;
+    S.moves = []; S.result = null; S.thinking = false; S.overlayClosed = false; S.confirmResign = false; clearSel();
+    replay(); saveAi(); render(); requestAi();
+  }
+  function saveAi() { store(SESSION_KEY, { mode: 'ai', level: S.level, myColor: S.myColor, moves: S.moves, result: S.result }); }
+  function undo() {
+    aiReq++; S.thinking = false; S.result = null; S.overlayClosed = false; clearSel();
+    if (S.moves.length) S.moves.pop();
+    replay();
+    while (S.moves.length && E.turn() !== S.myColor) { S.moves.pop(); replay(); }
+    saveAi(); render(); requestAi();
+  }
+
+  // ---------- online ----------
+  var dbNS = null;
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function dbTransport(code) {
+    var ref = dbNS.doc('games/' + code), unsub = null;
+    return {
+      kind: 'db',
+      create: function (doc) { return ref.set(doc); },
+      get: function () { return ref.get().then(function (s) { return s.exists ? clone(s.data()) : null; }); },
+      write: function (patch) { return ref.update(patch); },
+      listen: function (cb, onErr) { unsub = ref.onSnapshot(function (s) { if (s.exists) cb(clone(s.data())); }, function () { onErr('연결이 끊겼어요. 페이지를 새로 고쳐 주세요.'); }); },
+      close: function () { if (unsub) unsub(); unsub = null; }
+    };
+  }
+  function loadPeerLib() {
+    return new Promise(function (res, rej) {
+      if (window.Peer) return res();
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+      s.onload = function () { window.Peer ? res() : rej(new Error('nolib')); };
+      s.onerror = function () { rej(new Error('nolib')); };
+      document.head.appendChild(s);
+    });
+  }
+  function peerTransport(code) {
+    var pid = 'chess-hanpan-' + code, peer = null, doc = null, cb = null, errCb = null, okCb = null;
+    var conns = [], closed = false, retryTimer = null, tries = 0, api;
+    function send(except) { conns.forEach(function (c) { if (c !== except && c.open) c.send({ t: 'doc', doc: doc }); }); }
+    function wire(c) {
+      conns.push(c);
+      c.on('data', function (d) {
+        if (!d) return;
+        if (d.t === 'hello' && api.isHost) c.send({ t: 'doc', doc: doc });
+        if (d.t === 'doc') { doc = d.doc; if (api.isHost) send(c); if (cb) cb(clone(doc)); }
+      });
+      function gone() {
+        if (conns.indexOf(c) < 0) return;
+        conns = conns.filter(function (x) { return x !== c; });
+        if (!api.isHost) reconnect();
+      }
+      c.on('close', gone); c.on('error', gone);
+    }
+    function keepAlive() {
+      peer.on('disconnected', function () { if (!closed) { try { peer.reconnect(); } catch (e) {} } });
+    }
+    function reconnect() { // guest only: keep trying until the host is back
+      if (closed || retryTimer) return;
+      if (++tries > 60) { if (errCb) errCb('상대와 다시 연결하지 못했어요. 페이지를 새로 고쳐 주세요.'); return; }
+      if (errCb) errCb('상대와 연결이 끊겼어요. 다시 연결하는 중…');
+      retryTimer = setTimeout(function () {
+        retryTimer = null;
+        if (closed) return;
+        if (peer.disconnected) { try { peer.reconnect(); } catch (e) {} }
+        var c = peer.connect(pid, { reliable: true });
+        wire(c);
+        c.on('open', function () { tries = 0; c.send({ t: 'hello' }); if (okCb) okCb(); });
+        setTimeout(function () { if (!c.open && conns.indexOf(c) >= 0) { conns = conns.filter(function (x) { return x !== c; }); try { c.close(); } catch (e) {} reconnect(); } }, 6000);
+      }, 2500);
+    }
+    function openPeer(id, attempts) {
+      return loadPeerLib().then(function () {
+        return new Promise(function (res, rej) {
+          var p = id ? new window.Peer(id) : new window.Peer(), done = false;
+          p.on('open', function () { if (!done) { done = true; peer = p; keepAlive(); res(); } });
+          p.on('error', function (e) {
+            if (done) return;
+            done = true;
+            try { p.destroy(); } catch (x) {}
+            // after a reload the old id can stay reserved for a few seconds
+            if (e && e.type === 'unavailable-id' && attempts > 1) setTimeout(function () { openPeer(id, attempts - 1).then(res, rej); }, 2500);
+            else rej(e);
+          });
+          setTimeout(function () { if (!done) { done = true; try { p.destroy(); } catch (x) {} rej(new Error('timeout')); } }, 10000);
+        });
+      });
+    }
+    api = {
+      kind: 'peer', isHost: false,
+      create: function (d) {
+        api.isHost = true; doc = d;
+        return openPeer(pid, 8).then(function () { peer.on('connection', function (c) { wire(c); }); });
+      },
+      get: function () {
+        return openPeer(null, 1).then(function () {
+          return new Promise(function (res) {
+            var done = false, c = peer.connect(pid, { reliable: true });
+            function finish(v) { if (!done) { done = true; res(v); } }
+            wire(c);
+            var prev = cb;
+            cb = function (d) { cb = prev; finish(d); };
+            c.on('open', function () { c.send({ t: 'hello' }); });
+            peer.on('error', function (e) { if (!done && e && e.type === 'peer-unavailable') finish(null); });
+            setTimeout(function () { finish(null); }, 12000);
+          });
+        });
+      },
+      write: function (patch) { doc = Object.assign({}, doc, patch); send(null); if (cb) cb(clone(doc)); return Promise.resolve(); },
+      listen: function (f, onErr, onOk) { cb = f; errCb = onErr; okCb = onOk; },
+      close: function () { closed = true; if (retryTimer) clearTimeout(retryTimer); try { peer && peer.destroy(); } catch (e) {} }
+    };
+    return api;
+  }
+  function makeTransport(code) { return dbNS ? dbTransport(code) : peerTransport(code); }
+
+  function leaveOnline() { if (S.online) { S.online.t.close(); S.online = null; } }
+  function lobbyError(msg) { S.busy = false; S.lobbyMsg = msg; S.lobbyErr = true; render(); }
+
+  function startOnline(t, code, doc) {
+    leaveOnline(); aiReq++;
+    S.online = { t: t, kind: t.kind, code: code, doc: doc, spectator: false, err: '', writing: false };
+    S.screen = 'game'; S.mode = 'online'; S.flipped = false; S.overlayClosed = false; S.confirmResign = false; S.busy = false; S.lobbyMsg = ''; S.lobbyErr = false;
+    clearSel();
+    t.listen(applyDoc, function (msg) { if (S.online) { S.online.err = msg; render(); } }, function () { if (S.online) { S.online.err = ''; render(); } });
+    applyDoc(doc);
+  }
+  function applyDoc(doc) {
+    if (!S.online) return;
+    var prevRound = S.online.doc && S.online.doc.round;
+    S.online.doc = doc;
+    if (S.online.kind === 'db') store(SESSION_KEY, { mode: 'online', code: S.online.code });
+    else store(SESSION_KEY, { mode: 'peer', code: S.online.code, host: !!S.online.t.isHost, doc: S.online.t.isHost ? doc : null });
+    var seat = doc.white === ME ? 'w' : doc.black === ME ? 'b' : null;
+    S.online.spectator = !seat;
+    S.myColor = seat || 'w';
+    var incoming = doc.moves || [];
+    if (!(S.online.writing && incoming.length < S.moves.length)) S.moves = incoming.slice();
+    S.result = doc.result && doc.result.type === 'resign' ? doc.result : null;
+    if (doc.round !== prevRound) { S.overlayClosed = false; S.flipped = false; }
+    replay();
+    if (S.selected && !canMove()) clearSel();
+    render();
+  }
+  function createOnline() {
+    if (S.busy) return;
+    S.busy = true; S.lobbyMsg = '대국을 만들고 있어요…'; S.lobbyErr = false; render();
+    var code = rid(5), c = S.pick.invColor === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : S.pick.invColor;
+    var doc = { white: c === 'w' ? ME : null, black: c === 'b' ? ME : null, moves: [], result: null, round: 1, created: Date.now() };
+    var t = makeTransport(code);
+    t.create(doc).then(function () { startOnline(t, code, doc); }, function (e) {
+      lobbyError(t.kind === 'db'
+        ? (e && e.code === 'invalid_argument' ? '이 페이지의 편집 권한이 있어야 온라인 대국을 만들 수 있어요. 공유한 사람에게 권한을 요청해 주세요.' : '대국을 만들지 못했어요. 잠시 후 다시 시도해 주세요.')
+        : '온라인 연결을 열지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+    });
+  }
+  function joinOnline(code) {
+    code = (code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 5) { lobbyError('초대 코드는 5자리예요.'); return; }
+    if (S.busy) return;
+    S.busy = true; S.lobbyMsg = '대국을 찾고 있어요…'; S.lobbyErr = false; render();
+    var t = makeTransport(code);
+    t.get().then(function (doc) {
+      if (!doc) { t.close(); lobbyError('코드 ' + code + '에 해당하는 대국이 없어요. 코드를 다시 확인해 주세요.'); return; }
+      var seat = doc.white === ME ? 'w' : doc.black === ME ? 'b' : null;
+      var patch = null;
+      if (!seat) { if (!doc.white) patch = { white: ME }; else if (!doc.black) patch = { black: ME }; }
+      if (patch) {
+        Object.assign(doc, patch);
+        return t.write(patch).then(function () { startOnline(t, code, doc); });
+      }
+      startOnline(t, code, doc);
+    }).catch(function (e) {
+      t.close();
+      lobbyError(e && e.code === 'invalid_argument' ? '이 페이지의 편집 권한이 있어야 대국에 참가할 수 있어요.' : '대국에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    });
+  }
+  function resumePeer(saved) {
+    if (!saved.host) { joinOnline(saved.code); return; }
+    S.busy = true; S.lobbyMsg = '진행 중이던 대국을 다시 여는 중…'; S.lobbyErr = false; render();
+    var t = peerTransport(saved.code);
+    t.create(saved.doc).then(function () { startOnline(t, saved.code, saved.doc); }, function () {
+      store(SESSION_KEY, undefined);
+      lobbyError('진행 중이던 대국을 다시 열지 못했어요. 새 대국을 만들어 주세요.');
+    });
+  }
+  function resign() {
+    if (!S.confirmResign) { S.confirmResign = true; render(); setTimeout(function () { if (S.confirmResign) { S.confirmResign = false; render(); } }, 3000); return; }
+    S.confirmResign = false;
+    var r = { over: true, type: 'resign', winner: opp(S.myColor) };
+    if (S.mode === 'ai') { aiReq++; S.thinking = false; S.result = r; saveAi(); render(); }
+    else { S.result = r; render(); S.online.t.write({ result: r, updated: Date.now() }); }
+  }
+  function rematch() {
+    var d = S.online.doc;
+    S.online.t.write({ white: d.black, black: d.white, moves: [], result: null, round: (d.round || 1) + 1, updated: Date.now() });
+  }
+  function toLobby() {
+    leaveOnline(); aiReq++; S.thinking = false;
+    S.screen = 'lobby'; S.mode = null; S.moves = []; S.result = null; S.promo = null; clearSel();
+    S.busy = false; S.lobbyMsg = ''; S.lobbyErr = false;
+    store(SESSION_KEY, undefined);
+    replay(); render();
+  }
+
+  // ---------- events ----------
+  el('board').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-sq]'); if (b) clickSquare(b.getAttribute('data-sq'));
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var seg = b.getAttribute('data-seg');
+    if (seg) { S.pick[seg] = b.getAttribute('data-val'); render(); return; }
+    var pr = b.getAttribute('data-promo');
+    if (pr && S.promo) { var u = S.promo.from + S.promo.to + pr; S.promo = null; clearSel(); playMove(u); return; }
+    var act = b.getAttribute('data-act');
+    if (!act) return;
+    if (act === 'start-ai') startAi();
+    else if (act === 'create') createOnline();
+    else if (act === 'promo-cancel') { S.promo = null; clearSel(); render(); }
+    else if (act === 'flip') { S.flipped = !S.flipped; render(); }
+    else if (act === 'undo') undo();
+    else if (act === 'resign') resign();
+    else if (act === 'again') { S.pick.level = S.level; S.pick.aiColor = S.myColor; startAi(); }
+    else if (act === 'rematch') rematch();
+    else if (act === 'review') { S.overlayClosed = true; render(); }
+    else if (act === 'lobby') toLobby();
+    else if (act === 'copy') {
+      var code = S.online && S.online.code;
+      var done = function () { S.copied = true; render(); setTimeout(function () { S.copied = false; render(); }, 1500); };
+      try {
+        navigator.clipboard.writeText(code).then(done, function () { selectCode(); });
+      } catch (err) { selectCode(); }
+    }
+  });
+  function selectCode() {
+    var n = el('codeText'); if (!n) return;
+    var r = document.createRange(); r.selectNodeContents(n);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  document.addEventListener('submit', function (e) {
+    if (e.target.id === 'joinForm') { e.preventDefault(); joinOnline(el('joinCode').value); }
+  });
+
+  // ---------- boot ----------
+  replay(); render();
+  var saved = load(SESSION_KEY);
+  if (saved && saved.mode === 'ai' && Array.isArray(saved.moves)) {
+    S.screen = 'game'; S.mode = 'ai'; S.level = saved.level || 'normal'; S.myColor = saved.myColor === 'b' ? 'b' : 'w';
+    S.moves = saved.moves; S.result = saved.result || null; replay(); render(); requestAi();
+  }
+  var useP = window.claude && typeof window.claude.use === 'function' ? window.claude.use('db') : Promise.resolve(null);
+  Promise.resolve(useP).catch(function () { return null; }).then(function (ns) {
+    dbNS = ns || null;
+    S.onlineState = dbNS ? 'db' : 'peer';
+    if (saved && saved.mode === 'online' && saved.code && dbNS && S.screen === 'lobby') joinOnline(saved.code);
+    else if (saved && saved.mode === 'peer' && saved.code && !dbNS && S.screen === 'lobby') resumePeer(saved);
+    else render();
+  });
+})();
+</script>
+</body>
+</html>
